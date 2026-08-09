@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="no">
+  <head>
+    <meta charset="UTF-8" />
+    <title>PDF Scholar — plattformprobe</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <!--
+      Bring-up diagnostics for a new platform (see src/renderer/src/probe.ts).
+      Styles live inline on purpose: the probe must render even if the app's own
+      stylesheet is part of what is broken on the platform under test.
+    -->
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #ffffff;
+        --fg: #1d1d1f;
+        --muted: #6b6b70;
+        --line: #e2e2e6;
+        --ok: #1f7a45;
+        --bad: #b3261e;
+        --warn: #8a6100;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #1b1b1d;
+          --fg: #ededf0;
+          --muted: #9a9aa0;
+          --line: #35353a;
+          --ok: #5cc98a;
+          --bad: #ff8a80;
+          --warn: #e0b25c;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 24px max(16px, env(safe-area-inset-left)) 64px;
+        font: 15px/1.5 system-ui, sans-serif;
+        background: var(--bg);
+        color: var(--fg);
+      }
+      main { max-width: 780px; margin: 0 auto; }
+      h1 { font-size: 22px; margin: 0 0 4px; }
+      h2 { font-size: 15px; margin: 32px 0 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+      p.lead { margin: 0 0 8px; color: var(--muted); }
+      pre {
+        margin: 0;
+        padding: 12px 14px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font: 13px/1.5 ui-monospace, monospace;
+      }
+      ul { list-style: none; margin: 0; padding: 0; }
+      li {
+        display: grid;
+        grid-template-columns: 24px 1fr;
+        gap: 2px 8px;
+        padding: 10px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .mark { font: 16px/1.4 ui-monospace, monospace; }
+      .detail { grid-column: 2; color: var(--muted); font-size: 13px; }
+      .v-ja .mark { color: var(--ok); }
+      .v-nei .mark, .v-feil .mark { color: var(--bad); }
+      .v-delvis .mark, .v-hoppet-over .mark { color: var(--warn); }
+      button {
+        font: inherit;
+        padding: 12px 18px;
+        min-height: 44px;
+        margin: 0 8px 8px 0;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: transparent;
+        color: var(--fg);
+        cursor: pointer;
+      }
+      button:active { background: color-mix(in srgb, var(--fg) 10%, transparent); }
+      #pad {
+        width: 100%;
+        height: 260px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        /* The pad is the thing being drawn on, so it must claim the gesture —
+           this is the same touch-action: none the draw layer flips to. */
+        touch-action: none;
+        display: block;
+      }
+      .status { color: var(--muted); font-size: 13px; min-height: 20px; }
+      #render-paths { display: flex; flex-wrap: wrap; gap: 16px; }
+      #render-paths figure { margin: 0; }
+      /* A checkerboard behind each result: a blank canvas is transparent, and
+         against a plain background that is indistinguishable from a white page. */
+      #render-paths canvas {
+        width: 150px;
+        height: auto;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background-image: linear-gradient(45deg, var(--line) 25%, transparent 25%),
+          linear-gradient(-45deg, var(--line) 25%, transparent 25%),
+          linear-gradient(45deg, transparent 75%, var(--line) 75%),
+          linear-gradient(-45deg, transparent 75%, var(--line) 75%);
+        background-size: 12px 12px;
+        background-position: 0 0, 0 6px, 6px -6px, -6px 0;
+      }
+      #render-paths figcaption { font-size: 12px; color: var(--muted); margin-top: 6px; }
+      #insecure {
+        padding: 12px 14px;
+        border: 1px solid var(--warn);
+        border-radius: 10px;
+        margin: 16px 0;
+        font-size: 14px;
+      }
+      textarea {
+        width: 100%;
+        height: 260px;
+        margin-top: 12px;
+        font: 12px/1.4 ui-monospace, monospace;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px;
+        background: transparent;
+        color: var(--fg);
+      }
+    </style>
+    <script type="module" crossorigin src="./assets/probe-MxBjxnrU.js"></script>
+    <link rel="modulepreload" crossorigin href="./assets/pdf-worker-DFJj3wrl.js">
+  </head>
+  <body>
+    <main>
+      <h1>Plattformprobe</h1>
+      <p class="lead">Hva denne enheten faktisk gir oss. Kjører automatisk.</p>
+
+      <div id="insecure" hidden>
+        <strong>Usikker origin (http).</strong> Safari holder tilbake crypto.subtle,
+        crypto.randomUUID, delingsark og service workers utenfor HTTPS. Sjekkene som
+        krever dem er merket «hoppet over» — ikke «nei». Kjør over HTTPS for hele bildet.
+      </div>
+
+      <h2>Enhet</h2>
+      <pre id="context">…</pre>
+
+      <h2>Sjekker</h2>
+      <ul id="checks"></ul>
+
+      <h2>Blank side</h2>
+      <p class="lead">
+        Samme side tegnet tre veier. Er den første full og den siste blank, ligger
+        feilen i den løsrevne canvasen — ikke i pdf.js. Er alle tre blanke, tegner
+        ikke pdf.js på denne plattformen i det hele tatt.
+      </p>
+      <div id="render-paths"></div>
+
+      <h2>Canvas-tak</h2>
+      <p class="lead">
+        Hvor stor canvas maler enheten faktisk? Appen klamper mot 16384 — Chromiums
+        grense. Er tallet her lavere, klamper vi mot feil plattform.
+      </p>
+      <p><button id="canvas-ceiling">Mål canvas-tak</button></p>
+      <p class="status" id="canvas-status"></p>
+
+      <h2>Penn og finger</h2>
+      <p class="lead">
+        Tegn i feltet med Apple Pencil, og så med fingeren. Hold pennen like over
+        glasset uten å ta borti — teller «hover-hendelser» oppover, har vi
+        palmeavvisning å bygge på.
+      </p>
+      <canvas id="pad"></canvas>
+      <p><button id="clear-pad">Tøm feltet</button></p>
+      <pre id="pad-readout">Ingen pekerhendelser ennå.</pre>
+
+      <h2>Eksport</h2>
+      <p class="lead">De to veiene ut av appen når lagring på plass ikke finnes.</p>
+      <p>
+        <button id="share">Del PDF (delingsark)</button>
+        <button id="download">Last ned PDF</button>
+      </p>
+      <p class="status" id="share-status"></p>
+
+      <h2>Minnetak</h2>
+      <p class="lead">
+        Vokser en wasm-heap til Safari sier stopp. <strong>Fanen kan bli drept</strong> —
+        det er i seg selv et svar, og siste måling overlever en omlasting.
+      </p>
+      <p><button id="memory">Mål minnetak</button></p>
+      <p class="status" id="memory-status"></p>
+
+      <h2>Rapport</h2>
+      <p><button id="copy">Vis og kopier rapport</button></p>
+      <textarea id="report" hidden readonly></textarea>
+    </main>
+  </body>
+</html>
